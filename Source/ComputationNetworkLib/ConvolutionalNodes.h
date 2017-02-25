@@ -788,7 +788,7 @@ public:
     void Load(File& fstream, size_t modelVersion) override
     {
         ConvolutionNodeBase<ElemType>::Load(fstream, modelVersion);
-        if (modelVersion >= CNTK_MODEL_VERSION_19)
+        if (modelVersion >= CNTK_MODEL_VERSION_20)
         {
             fstream >> m_ceilOutDim;
         }
