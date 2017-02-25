@@ -754,7 +754,7 @@ class PoolingNode : public ConvolutionNodeBase<ElemType>, public NumInputs<1>, p
     static const std::wstring TypeName() { return L"Pooling"; }
 public:
     PoolingNode(DEVICEID_TYPE deviceId, const wstring& name)
-        : Base(deviceId, name)
+        : Base(deviceId, name), m_ceilOutDim(false)
     {
     }
     PoolingNode(DEVICEID_TYPE deviceId, const wstring& name, PoolKind pool, const TensorShape& kernelShape, const TensorShape& strideShape,
