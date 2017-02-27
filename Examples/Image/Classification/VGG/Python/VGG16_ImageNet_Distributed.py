@@ -163,10 +163,10 @@ def train_and_test(network, trainer, train_source, test_source, progress_printer
 
     # Train all minibatches 
     training_session(
-        training_config = TrainingConfig(trainer=trainer, mb_source = train_source,
-                                         var_to_stream = input_map,
-                                         mb_size_schedule = mb_size_schedule,
-                                         config=config),
+        trainer=trainer, mb_source = train_source,
+        var_to_stream = input_map,
+        mb_size_schedule = mb_size_schedule,
+        config=config,
         progress_config = ProgressConfig(writers=progress_printer, frequency=epoch_size),
         checkpoint_config = CheckpointConfig(filename = os.path.join(model_path, model_name), restore=restore),
         cv_config = CrossValidationConfig(source=test_source, schedule=mb_size_schedule)

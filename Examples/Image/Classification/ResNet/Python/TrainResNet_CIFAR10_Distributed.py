@@ -115,9 +115,9 @@ def train_and_test(network, trainer, train_source, test_source, progress_printer
         start_profiler(sync_gpu=True)
         
     training_session(
-        training_config = TrainingConfig(trainer=trainer, mb_source = train_source, 
-                                         mb_size = minibatch_size,
-                                         var_to_stream = input_map),
+        trainer=trainer, mb_source = train_source, 
+        mb_size = minibatch_size,
+        var_to_stream = input_map,
         checkpoint_config = CheckpointConfig(frequency=epoch_size, filename="ResNet_CIFAR10_DataAug", restore=False),
         progress_config = ProgressConfig(writers=progress_printer, frequency=epoch_size),
         cv_config = CrossValidationConfig(source=test_source, mb_size=16)

@@ -4680,36 +4680,6 @@ namespace CNTK
     CNTK_API QuantizedDistributedCommunicatorPtr QuantizedMPICommunicator(bool zeroThresholdFor1Bit, bool useQuantizationForSelfStripe, size_t numQuantizationBits);
 
     ///
-    /// Training configuration.
-    ///
-    class TrainingConfig
-    {
-    public:
-        ///
-        /// Constructor of the training config.
-        /// trainer : an instance of a trainer
-        /// trainingSource: minibatch source
-        /// minibatchSizeSchedule: mb size schedule
-        /// inputVarToStream: var to stream mapping
-        /// maxNumbTrainingSamples
-        /// config : a training configuration
-        ///
-        CNTK_API TrainingConfig(const TrainerPtr& trainer,
-            const MinibatchSourcePtr& trainingSource,
-            const MinibatchSizeSchedule& minibatchSizeSchedule,
-            const std::unordered_map<Variable, StreamInformation>& inputVarToStream,
-            size_t maxNumTrainingSamples = std::numeric_limits<size_t>::max());
-
-    private:
-        friend class TrainingSession;
-        TrainerPtr m_trainer;
-        const MinibatchSourcePtr m_source;
-        const MinibatchSizeSchedule m_mbSize;
-        const std::unordered_map<Variable, StreamInformation> m_varToStream;
-        const size_t m_maxNumSamples;
-    };
-
-    ///
     /// Cross validation configuration
     ///
     class CrossValidationConfig
@@ -4812,14 +4782,18 @@ namespace CNTK
         /// trainingSource: minibatch source
         /// minibatchSizeSchedule: mb size schedule
         /// inputVarToStream: var to stream mapping
-        /// maxNumbTrainingSamples
-        /// config : a training configuration
+        /// maxNumTrainingSamples: max number of training samples
+        /// progress : a training configuration
         ///
         CNTK_API TrainingSession(
-            const TrainingConfig& training,
-            const ProgressConfig& progress,
-            const CheckpointConfig& checkpointing,
-            const CrossValidationConfig& crossValidation);
+            const TrainerPtr& trainer,
+            const MinibatchSourcePtr& trainingSource,
+            const MinibatchSizeSchedule& minibatchSizeSchedule,
+            const std::unordered_map<Variable, StreamInformation>& inputVarToStream,
+            size_t maxNumTrainingSamples = std::numeric_limits<size_t>::max(),
+            const ProgressConfig& progress = {},
+            const CheckpointConfig& checkpointing = {},
+            const CrossValidationConfig& crossValidation = {});
 
         /// !!! DEPRECATED !!!
         /// Constructor of the training session: 
@@ -4873,7 +4847,7 @@ namespace CNTK
         ///
         virtual size_t GetMinibatchSize()
         {
-            return m_training.m_mbSize[Trainer()->TotalNumberOfSamplesSeen()];
+            return m_mbSize[Trainer()->TotalNumberOfSamplesSeen()];
         }
 
         ///
@@ -4915,7 +4889,7 @@ namespace CNTK
         ///
         /// Accessors.
         ///
-        TrainerPtr Trainer() const { return m_training.m_trainer; }
+        TrainerPtr Trainer() const { return m_trainer; }
 
     private:
         /// Disallow copy and move construction and assignment
@@ -4939,7 +4913,14 @@ namespace CNTK
 
         std::vector<PeriodicAction> m_actions;
 
-        TrainingConfig m_training;
+        // Training.
+        TrainerPtr m_trainer;
+        const MinibatchSourcePtr m_source;
+        const MinibatchSizeSchedule m_mbSize;
+        const std::unordered_map<Variable, StreamInformation> m_varToStream;
+        const size_t m_maxNumSamples;
+
+        // Additional configuration.
         CheckpointConfig m_checkpoint;
         CrossValidationConfig m_cv;
         ProgressConfig m_progress;
@@ -5067,10 +5048,14 @@ namespace CNTK
     /// Creates an instance of the training session class. Parameters match the parameters of the TrainingSession constructor.
     ///
     CNTK_API TrainingSessionPtr CreateTrainingSession(
-        const TrainingConfig& training,
-        const ProgressConfig& progress = ProgressConfig(),
-        const CheckpointConfig& checkpointing = CheckpointConfig(),
-        const CrossValidationConfig& crossValidation = CrossValidationConfig());
+        const TrainerPtr& trainer,
+        const MinibatchSourcePtr& trainingSource,
+        const MinibatchSizeSchedule& minibatchSizeSchedule,
+        const std::unordered_map<Variable, StreamInformation>& inputVarToStream,
+        size_t maxNumTrainingSamples = std::numeric_limits<size_t>::max(),
+        const ProgressConfig& progress = {},
+        const CheckpointConfig& checkpointing = {},
+        const CrossValidationConfig& crossValidation = {});
 }
 
 

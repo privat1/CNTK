@@ -22,31 +22,6 @@ namespace CNTK
             find_if(s.begin(), s.end(), [](wchar_t c) { return !isdigit(c); }) == s.end();
     }
 
-    // Configurations.
-    TrainingConfig::TrainingConfig(const TrainerPtr& trainer,
-        const MinibatchSourcePtr& trainingSource,
-        const MinibatchSizeSchedule& minibatchSizeSchedule,
-        const std::unordered_map<Variable, StreamInformation>& inputVarToStream,
-        size_t maxNumTrainingSamples):
-        m_trainer(trainer),
-        m_source(trainingSource),
-        m_mbSize(minibatchSizeSchedule),
-        m_varToStream(inputVarToStream),
-        m_maxNumSamples(maxNumTrainingSamples)
-    {
-        if (!m_trainer)
-            InvalidArgument("Trainer is not allowed to be null.");
-
-        if (!m_source)
-            InvalidArgument("Training source must not be null.");
-
-        if (m_maxNumSamples == 0)
-            InvalidArgument("maxNumTrainingSamples must not be zero.");
-
-        if (m_varToStream.empty())
-            InvalidArgument("inputVarToStream mapping must not be empty.");
-    }
-
     CheckpointConfig::CheckpointConfig(
         const std::wstring& checkPointFileName,
         size_t checkpointFrequencyInSamples,
@@ -120,12 +95,20 @@ namespace CNTK
     }
 
     TrainingSessionPtr CreateTrainingSession(
-        const TrainingConfig& training,
+        const TrainerPtr& trainer,
+        const MinibatchSourcePtr& trainingSource,
+        const MinibatchSizeSchedule& minibatchSizeSchedule,
+        const std::unordered_map<Variable, StreamInformation>& inputVarToStream,
+        size_t maxNumTrainingSamples,
         const ProgressConfig& progress,
         const CheckpointConfig& checkpointing,
         const CrossValidationConfig& crossValidation)
     {
-        return MakeSharedObject<TrainingSession>(training,
+        return MakeSharedObject<TrainingSession>(trainer,
+            trainingSource,
+            minibatchSizeSchedule,
+            inputVarToStream,
+            maxNumTrainingSamples,
             progress, checkpointing, crossValidation);
     }
 
@@ -145,7 +128,7 @@ namespace CNTK
         size_t progressFrequencyInSamples,
         const std::vector<ProgressWriterPtr>& progressWriters)
         : TrainingSession(
-            TrainingConfig(trainer, trainingSource, schedule, modelInputToMinibatchSourceStream, maxNumberOfSamples),
+            trainer, trainingSource, schedule, modelInputToMinibatchSourceStream, maxNumberOfSamples,
             ProgressConfig(progressWriters, progressFrequencyInSamples),
             CheckpointConfig(checkPointFileName, checkpointFrequencyInSamples, restoreFromCheckpointIfExists, saveAllCheckpoints),
             CrossValidationConfig(crossValidationSource, crossValidationSchedule, crossValidationFrequencyInSamples))
@@ -153,11 +136,19 @@ namespace CNTK
     }
 
     TrainingSession::TrainingSession(
-        const TrainingConfig& training,
+        const TrainerPtr& trainer,
+        const MinibatchSourcePtr& trainingSource,
+        const MinibatchSizeSchedule& minibatchSizeSchedule,
+        const std::unordered_map<Variable, StreamInformation>& inputVarToStream,
+        size_t maxNumTrainingSamples,
         const ProgressConfig& progress,
         const CheckpointConfig& checkpointing,
         const CrossValidationConfig& crossValidation) :
-        m_training(training),
+        m_trainer(trainer),
+        m_source(trainingSource),
+        m_mbSize(minibatchSizeSchedule),
+        m_varToStream(inputVarToStream),
+        m_maxNumSamples(maxNumTrainingSamples),
         m_progress(progress),
         m_checkpoint(checkpointing),
         m_cv(crossValidation),
@@ -165,9 +156,21 @@ namespace CNTK
         m_workerRank(0),
         m_numberOfWorkers(1)
     {
+        if (!m_trainer)
+            InvalidArgument("Trainer is not allowed to be null.");
+
+        if (!m_source)
+            InvalidArgument("Training source must not be null.");
+
+        if (m_maxNumSamples == 0)
+            InvalidArgument("maxNumTrainingSamples must not be zero.");
+
+        if (m_varToStream.empty())
+            InvalidArgument("inputVarToStream mapping must not be empty.");
+
         // Let's calculate the warm up period the distributed learners may need.
         // We will take the maximum warm up period required.
-        auto learners = m_training.m_trainer->ParameterLearners();
+        auto learners = m_trainer->ParameterLearners();
         m_parallelAfterSamples = 0;
         for (const auto& l : learners)
         {
@@ -201,21 +204,21 @@ namespace CNTK
             m_actions.push_back({ m_progress.m_frequency, 0, 0,
                 [this](size_t currentIndex, const DeviceDescriptor&) { ReportProgress(currentIndex); return true; } });
 
-            m_training.m_trainer->AddProgressWriters(m_progress.m_writers);
+            m_trainer->AddProgressWriters(m_progress.m_writers);
         }
     }
 
     void TrainingSession::Train(const DeviceDescriptor& computeDevice)
     {
         std::unordered_map<Variable, ValuePtr> minibatch;
-        bool shouldTrain = m_training.m_maxNumSamples > 0;
+        bool shouldTrain = m_maxNumSamples > 0;
 
         // Let's try to restore if required.
         size_t restoredNumberOfSamples = 0;
         if (m_checkpoint.m_restore && !m_checkpoint.m_fileName.empty())
         {
             RestoreFromCheckpoint();
-            restoredNumberOfSamples = m_training.m_trainer->TotalNumberOfSamplesSeen();
+            restoredNumberOfSamples = m_trainer->TotalNumberOfSamplesSeen();
         }
 
         // Main train loop.
@@ -223,9 +226,9 @@ namespace CNTK
         while (shouldTrain)
         {
             // Get next minibatch.
-            size_t samplesLeft = earlyExit || m_training.m_maxNumSamples <= Trainer()->TotalNumberOfSamplesSeen()
+            size_t samplesLeft = earlyExit || m_maxNumSamples <= Trainer()->TotalNumberOfSamplesSeen()
                 ? 0
-                : m_training.m_maxNumSamples - Trainer()->TotalNumberOfSamplesSeen();
+                : m_maxNumSamples - Trainer()->TotalNumberOfSamplesSeen();
 
             // Note that in case of distributed training we don't want to stop if the local minibatch
             // is empty - it is possible that the other workers are still processing their minibatches.
@@ -291,7 +294,7 @@ namespace CNTK
             {
                 // TODO: it may be slow to rely on TestMinibatch to return error each time, since it may require transfer
                 // of error from the GPU each time.
-                error = m_training.m_trainer->TestMinibatch(minibatch, computeDevice, sampleCount);
+                error = m_trainer->TestMinibatch(minibatch, computeDevice, sampleCount);
                 accumulatedError += error * sampleCount;
                 totalNumberOfSamples += sampleCount;
                 numberOfMinibatches++;
@@ -325,7 +328,7 @@ namespace CNTK
 
         size_t mbSize = GetMinibatchSize();
         mbSize = std::min(mbSize, maxMbSize);
-        GetNextMinibatch(m_training.m_source, minibatch, mbSize, workerRank, numberOfWorkers, computeDevice);
+        GetNextMinibatch(m_source, minibatch, mbSize, workerRank, numberOfWorkers, computeDevice);
     }
 
     void TrainingSession::GetCrossValidationMinibatch(std::unordered_map<Variable, ValuePtr>& minibatch, size_t maxMbSize, const DeviceDescriptor& computeDevice)
@@ -346,21 +349,21 @@ namespace CNTK
         if (minibatchData.empty())
             return;
 
-        for (auto v : m_training.m_varToStream)
+        for (auto v : m_varToStream)
             minibatch.insert({ v.first, minibatchData[v.second].data });
     }
 
     void TrainingSession::RestoreFromCheckpoint(const std::wstring& checkpointFileName)
     {
         Dictionary externalState = Trainer()->RestoreFromCheckpoint(checkpointFileName);
-        m_training.m_source->RestoreFromCheckpoint(externalState[s_trainingMinibatchSource].Value<Dictionary>());
+        m_source->RestoreFromCheckpoint(externalState[s_trainingMinibatchSource].Value<Dictionary>());
     }
 
     void TrainingSession::SaveCheckpoint(size_t currentIndex)
     {
         OnCheckpointStart(currentIndex);
         Dictionary externalState;
-        externalState[s_trainingMinibatchSource] = m_training.m_source->GetCheckpointState();
+        externalState[s_trainingMinibatchSource] = m_source->GetCheckpointState();
 
         wstring checkpointFile = m_checkpoint.m_fileName;
         if (m_checkpoint.m_preserveAll)
@@ -372,7 +375,7 @@ namespace CNTK
     void TrainingSession::SaveFinalCheckpoint()
     {
         Dictionary externalState;
-        externalState[s_trainingMinibatchSource] = m_training.m_source->GetCheckpointState();
+        externalState[s_trainingMinibatchSource] = m_source->GetCheckpointState();
         Trainer()->SaveCheckpoint(m_checkpoint.m_fileName, externalState);
     }
 
