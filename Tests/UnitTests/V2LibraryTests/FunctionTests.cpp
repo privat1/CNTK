@@ -457,7 +457,30 @@ void TestSplice()
 
 void TestPooling()
 {
-    ReportFailure("Pooling unit test undefined");
+    // Test ceil or floor output size computing
+    {
+        auto testCeilOutDimPooling = [](NDShape inputShape, NDShape kernelShape, NDShape stride, bool sameOutDim)
+        {
+            auto inputVar = InputVariable(inputShape, DataType::Float, "input");
+            auto floorPooling = Pooling(inputVar, PoolingType::Max, kernelShape, stride, { false }, { (0) }, { (0) }, false);
+            auto ceilPooling = Pooling(inputVar, PoolingType::Max, kernelShape, stride, { false }, { (0) }, { (0) }, true);
+            auto floorOutput = floorPooling->Output().Shape();
+            auto ceilOutput = ceilPooling->Output().Shape();
+            if (sameOutDim && floorOutput != ceilOutput) {
+                ReportFailure("Ceiling and Flooring expect same output size in the case");
+            }
+            if (!sameOutDim && floorOutput == ceilOutput) {
+                ReportFailure("Ceiling and Flooring expect different output size in the case");
+            }
+        };
+
+        NDShape stride = { 3, 2, 2 };
+
+        // The case of ResNet, different output size
+        testCeilOutDimPooling(NDShape({ 3, 112, 112 }), NDShape({ 3, 3 }), stride, false);
+        // The case of VGG, same output size
+        testCeilOutDimPooling(NDShape({ 3, 112, 112 }), NDShape({ 2, 2 }), stride, true);
+    }
 }
 
 void TestTimesNodeShapeInference()
