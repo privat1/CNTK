@@ -457,7 +457,7 @@ void TestSplice()
 
 void TestPooling()
 {
-    assert(0);
+    ReportFailure("Pooling unit test undefined");
 }
 
 void TestTimesNodeShapeInference()
