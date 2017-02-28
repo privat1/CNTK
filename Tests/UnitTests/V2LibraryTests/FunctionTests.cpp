@@ -455,6 +455,11 @@ void TestSplice()
     }
 }
 
+void TestPooling()
+{
+    assert(0);
+}
+
 void TestTimesNodeShapeInference()
 {
     auto timesNodeShapeInferenceTest = [](size_t inputRank, size_t outputRank, int inputRankToMap) {
@@ -1018,6 +1023,11 @@ BOOST_AUTO_TEST_CASE(TransposeInGPU)
 {
     if (IsGPUAvailable())
         TestTranspose(3, 1, 2, DeviceDescriptor::GPUDevice(0));
+}
+
+BOOST_AUTO_TEST_CASE(Pooling)
+{
+    TestPooling();
 }
 
 BOOST_AUTO_TEST_CASE(OutputVariableNameInCPU)
