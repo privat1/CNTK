@@ -476,12 +476,12 @@ void TestPooling()
             }
         };
 
-        NDShape stride = { 3, 2, 2 };
+        NDShape stride = { 2, 2, 3 };
 
         // The case of ResNet, different output size
-        testCeilOutDimPooling(NDShape({ 3, 112, 112 }), NDShape({ 3, 3 }), stride, false);
+        testCeilOutDimPooling(NDShape({ 112, 112, 3 }), NDShape({ 3, 3 }), stride, false);
         // The case of VGG, same output size
-        testCeilOutDimPooling(NDShape({ 3, 112, 112 }), NDShape({ 2, 2 }), stride, true);
+        testCeilOutDimPooling(NDShape({ 112, 112, 3 }), NDShape({ 2, 2 }), stride, true);
     }
 }
 
