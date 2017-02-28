@@ -467,10 +467,12 @@ void TestPooling()
             auto floorOutput = floorPooling->Output().Shape();
             auto ceilOutput = ceilPooling->Output().Shape();
             if (sameOutDim && floorOutput != ceilOutput) {
-                ReportFailure("Ceiling and Flooring expect same output size in the case");
+                ReportFailure("Ceiling and Flooring expect same output size in the case between [%d * %d * %d] and [%d * %d * %d]", 
+                    floorOutput[0], floorOutput[1], floorOutput[2], ceilOutput[0], ceilOutput[1], ceilOutput[2]);
             }
             if (!sameOutDim && floorOutput == ceilOutput) {
-                ReportFailure("Ceiling and Flooring expect different output size in the case");
+                ReportFailure("Ceiling and Flooring expect different output size in the case between [%d * %d * %d] and [%d * %d * %d]",
+                    floorOutput[0], floorOutput[1], floorOutput[2], ceilOutput[0], ceilOutput[1], ceilOutput[2]);
             }
         };
 
